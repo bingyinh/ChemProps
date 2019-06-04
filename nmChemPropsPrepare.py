@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+# 06/04/2019 Bingyin Hu
+
 import requests
 import xlrd
 from pymongo import MongoClient
