@@ -168,6 +168,12 @@ class nmChemPropsPrepare():
             # loop through the items in the self.polymer dict, see if everything matches
             for uSMILES in self.polymer:
                 gsData = self.polymer[uSMILES] # google spreadsheet data
+                # if MongoDB doesn't have this uSMILES document
+                if cp.polymer.find({"_id": uSMILES}).count() == 0:
+                    # insert it directly
+                    cp.polymer.insert(self.polymer[uSMILES])
+                    continue
+                # otherwise, take the first and only result
                 mgData = cp.polymer.find({"_id": uSMILES})[0] # mongo data, find by _id
                 # continue if there is no difference between gsData and mgData
                 if gsData == mgData:
@@ -225,6 +231,12 @@ class nmChemPropsPrepare():
             for std_name in self.filler:
                 # same structure as self.polymer
                 gsData = self.filler[std_name]
+                # if MongoDB doesn't have this std_name document
+                if cp.filler.find({"_id": std_name}).count() == 0:
+                    # insert it directly
+                    cp.filler.insert(self.filler[std_name])
+                    continue
+                # otherwise, take the first and only result
                 mgData = cp.filler.find({"_id": std_name})[0]
                 if gsData == mgData:
                     continue
