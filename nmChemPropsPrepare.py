@@ -172,6 +172,7 @@ class nmChemPropsPrepare():
                 if cp.polymer.find({"_id": uSMILES}).count() == 0:
                     # insert it directly
                     cp.polymer.insert(self.polymer[uSMILES])
+                    logging.info("Insert polymer with uSMILES (_id): %s to ChemProps." %(uSMILES))
                     continue
                 # otherwise, take the first and only result
                 mgData = cp.polymer.find({"_id": uSMILES})[0] # mongo data, find by _id
@@ -235,6 +236,7 @@ class nmChemPropsPrepare():
                 if cp.filler.find({"_id": std_name}).count() == 0:
                     # insert it directly
                     cp.filler.insert(self.filler[std_name])
+                    logging.info("Insert filler with std_name (_id): %s to ChemProps." %(std_name))
                     continue
                 # otherwise, take the first and only result
                 mgData = cp.filler.find({"_id": std_name})[0]
