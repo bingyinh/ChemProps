@@ -6,6 +6,7 @@ import requests
 import xlrd
 from pymongo import MongoClient
 import logging
+import string
 
 class nmChemPropsPrepare():
     def __init__(self):
@@ -98,14 +99,19 @@ class nmChemPropsPrepare():
                     "_abbreviations": [],
                     "_synonyms": [],
                     "_tradenames": [],
-                    "_density": rowdata[hmap['density(g/cm3)']]
+                    "_density": rowdata[hmap['density(g/cm3)']],
+                    "_boc": [self.bagOfChar(rowdata[hmap['std_name']])]
                 }
             # abbreviations
             if len(rowdata[hmap['abbreviations']]) > 0:
                 self.polymer[rowdata[hmap['uSMILES']]]['_abbreviations'] = self.striplist(rowdata[hmap['abbreviations']].split(';'))
+                for abb in self.polymer[rowdata[hmap['uSMILES']]]['_abbreviations']:
+                    self.polymer[rowdata[hmap['uSMILES']]]['_boc'].append(self.bagOfChar(abb))
             # synonyms
             if len(rowdata[hmap['synonyms']]) > 0:
                 self.polymer[rowdata[hmap['uSMILES']]]['_synonyms'] = self.striplist(rowdata[hmap['synonyms']].split(';'))
+                for syn in self.polymer[rowdata[hmap['uSMILES']]]['_synonyms']:
+                    self.polymer[rowdata[hmap['uSMILES']]]['_boc'].append(self.bagOfChar(syn))
             # tradenames
             if len(rowdata[hmap['tradenames']]) > 0:
                 self.polymer[rowdata[hmap['uSMILES']]]['_tradenames'] = self.striplist(rowdata[hmap['tradenames']].split(';'))
@@ -126,8 +132,14 @@ class nmChemPropsPrepare():
         for row in range(1, sheet.nrows):
             rowdata = sheet.row_values(row)
             if rowdata[hmap['std_name']] not in self.filler:
-                self.filler[rowdata[hmap['std_name']]] = {"_id":rowdata[hmap['std_name']], "_density": rowdata[hmap['density_g_cm3']], "_alias":[]}
+                self.filler[rowdata[hmap['std_name']]] = {
+                    "_id":rowdata[hmap['std_name']],
+                    "_density": rowdata[hmap['density_g_cm3']],
+                    "_alias":[],
+                    "_boc": [self.bagOfChar(rowdata[hmap['std_name']])]
+                }
             self.filler[rowdata[hmap['std_name']]]['_alias'].append(rowdata[hmap['nm_entry']])
+            self.filler[rowdata[hmap['std_name']]]['_boc'].append(self.bagOfChar(rowdata[hmap['nm_entry']]))
         # log
         logging.info("Finish processing the filler data.")
 
@@ -186,9 +198,21 @@ class nmChemPropsPrepare():
                         {"_id": uSMILES},
                         {"%s" %(change[0]): { change[1]: change[2]}}
                     )
-                    logging.info("Apply %s with value %s to %s of the polymer with uSMILES: %s in ChemProps."
+                    logging.info("Apply %s with value %s to %s of the polymer with uSMILES (_id): %s in ChemProps."
                                  %(change[0], change[2], change[1], uSMILES)
                                 )
+                    # rebuild _boc from ground up as well, "_stdname", "_abbreviations", "_synonyms"
+                    boc = []
+                    document = cp.polymer.find({"_id": uSMILES})[0]
+                    boc.append(self.bagOfChar(document["_stdname"]))
+                    for abb in document["_abbreviations"]:
+                        boc.append(self.bagOfChar(abb))
+                    for syn in document["_synonyms"]:
+                        boc.append(self.bagOfChar(syn))
+                    cp.polymer.update(
+                        {"_id": uSMILES},
+                        {"$set": {"_boc": boc}})
+                    logging.info("_boc updated for the polymer with uSMILES (_id): %s in ChemProps." %(uSMILES))
             # end of the loop
         ## first creation cases (filler)
         if initFiller:
@@ -225,9 +249,19 @@ class nmChemPropsPrepare():
                         {"_id": std_name},
                         {"%s" %(change[0]): { change[1]: change[2]}}
                     )
-                    logging.info("Apply %s with value %s to %s of the filler with std_name: %s in ChemProps."
+                    logging.info("Apply %s with value %s to %s of the filler with std_name (_id): %s in ChemProps."
                                  %(change[0], change[2], change[1], std_name)
                                 )
+                    # rebuild _boc from ground up as well, "_id", "_alias"
+                    boc = []
+                    document = cp.filler.find({"_id": std_name})[0]
+                    boc.append(self.bagOfChar(document["_id"]))
+                    for ali in document["_alias"]:
+                        boc.append(self.bagOfChar(ali))
+                    cp.filler.update(
+                        {"_id": std_name},
+                        {"$set": {"_boc": boc}})
+                    logging.info("_boc updated for the filler with std_name (_id): %s in ChemProps." %(std_name))
             # end of the loop
         ## append gsUpdate records as WARNING to the log
         for rec in self.gsUpdate:
@@ -251,9 +285,12 @@ class nmChemPropsPrepare():
     def compareDict(self, d1, d1name, d2, d2name, imtbKeys):
         result = {d1name: [], d2name: []} # init output dict
         # prepPolymer guarantees d1 and d2 will have the same keys set even if
-        # some keys will have empty string or list
+        # some keys will have empty string or list (except for _boc)
         allKeys = set(d1.keys())
         for key in allKeys:
+            # skip _boc
+            if key == '_boc':
+                continue
             # immutables always trust d1 has the latest version
             if key in imtbKeys:
                 if d1[key] != d2[key]:
@@ -271,6 +308,16 @@ class nmChemPropsPrepare():
                 for addTod1 in d2subd1:
                     result[d1name].append(('$addToSet', key, addTod1))
         return result
+
+    # a helper method to generate a bocStr for a string based on the occurrence
+    # of the chars. Example: (a,b,c,...,y,z,0,1,2,3,4,5,6,7,8,9) to 101214...01
+    def bagOfChar(self, myStr):
+        bag = []
+        for alphabet in string.ascii_lowercase:
+            bag.append(str(myStr.lower().count(alphabet)))
+        for number in string.digits:
+            bag.append(str(myStr.lower().count(number)))
+        return ''.join(bag)
 
 if __name__ == '__main__':
     nm = nmChemPropsPrepare()
