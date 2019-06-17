@@ -45,9 +45,9 @@ class nmChemPropsAPI():
     # 4) bag-of-character comparison for polymer names (in _stdname, _synonyms), wf 3
     # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
     # input format:
-    # {'ChemicalName': 'Poly(styrene)', 'Abbreviation': 'PS', 'TradeName': 'Dylite', 'uSMILE': ''}
-    # NanoMine schema guarantees 'ChemicalName' has minimum occurrence of 1
-    # 'Abbreviation', 'TradeName', and 'uSMILE' are not required, since users might leave them blank
+    #   {'ChemicalName': 'Poly(styrene)', 'Abbreviation': 'PS', 'TradeName': 'Dylite', 'uSMILE': ''}
+    #   NanoMine schema guarantees 'ChemicalName' has minimum occurrence of 1
+    #   'Abbreviation', 'TradeName', and 'uSMILE' are not required, since users might leave them blank
     # output format:
     # if there is a match:
     #   {'StandardName': _stdname, 'uSMILE': _id, 'density': _density}
@@ -56,21 +56,51 @@ class nmChemPropsAPI():
     # if there is not a match:
     #   insert _inputname, _inputabbr, _inputsmiles, _nmid[] to unknowns.polymer
     def searchPolymers(self, keywords):
-        candidates = dict() # use '_stdname' as keys
+        candidates = dict() # use '_id' as keys
         # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
         rptname = keywords['ChemicalName']
         # query for '_stdname' with rptname
-        for cand in self.cp.polymer.find({'_stdname': {$regex: rptname, $options: 'i'}}):
-            if cand['_stdname'] not in candidates:
-                candidates[cand['_stdname']] = {'data': cand, 'wf': 0}
-            candidates[cand['_stdname']]['wf'] += 3
+        for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname, '$options': 'i'}}):
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 3
         # query for '_abbreviations' array
-        for cand in self.cp.polymer.find({'_abbreviations': {$regex: rptname, $options: 'i'}})
-            if cand['_stdname'] not in candidates:
-                candidates[cand['_stdname']] = {'data': cand, 'wf': 0}
-            candidates[cand['_stdname']]['wf'] += 3
-        
+        for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}})
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 3
+        # query for '_synonyms' array
+        for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}})
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 3
         # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2
+        if 'Abbreviation' in keywords:
+            rptabbr = keywords['Abbreviation']
+            # query for '_abbreviations' array
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}})
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 2
         # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
+        if 'TradeName' in keywords:
+            rpttrad = keywords['TradeName']
+            # query for '_tradenames' array
+            for cand in self.cp.polymer.find({'_tradenames': {'$regex': '/%s/' %(rpttrad), '$options': 'i'}})
         # 4) bag-of-character comparison for polymer names (in _stdname, _synonyms), wf 3
         # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
+
+
+    def containAllWords(self, query, field, collection):
+        import re
+        import string
+        pattern = re.compile('[^a-zA-Z]', re.UNICODE)
+        pattern.sub(' ', query) 
+        words = query.split()
+        ids = dict()
+        for word in words:
+            for result in collection.find({field: {'$regex': word, '$options':'i'}}):
+                if result['_id'] not in ids:
+                    ids[result['_id']] = {'data': result, 'freq': 0}
+                ids[result['_id']]['freq'] += 1
+        # check if the length of words equals any of the freq in ids
