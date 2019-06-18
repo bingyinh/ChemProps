@@ -4,6 +4,8 @@
 
 from pymongo import MongoClient
 import logging
+import re # for query reformat
+import string # for query reformat
 
 class nmChemPropsAPI():
     def __init__(self, nmid):
@@ -51,7 +53,7 @@ class nmChemPropsAPI():
     # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
     # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2
     # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
-    # 4) bag-of-character comparison for polymer names (in _stdname, _synonyms), wf 3
+    # 4) bag-of-character comparison for polymer names (in _boc), wf 2+1
     # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
     # input format:
     #   {'ChemicalName': 'Poly(styrene)', 'Abbreviation': 'PS', 'TradeName': 'Dylite', 'uSMILE': ''}
@@ -74,12 +76,12 @@ class nmChemPropsAPI():
                 candidates[cand['_id']] = {'data': cand, 'wf': 0}
             candidates[cand['_id']]['wf'] += 3
         # query for '_abbreviations' array
-        for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}})
+        for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
             if cand['_id'] not in candidates:
                 candidates[cand['_id']] = {'data': cand, 'wf': 0}
             candidates[cand['_id']]['wf'] += 3
         # query for '_synonyms' array
-        for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}})
+        for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}}):
             if cand['_id'] not in candidates:
                 candidates[cand['_id']] = {'data': cand, 'wf': 0}
             candidates[cand['_id']]['wf'] += 3
@@ -87,7 +89,7 @@ class nmChemPropsAPI():
         if 'Abbreviation' in keywords:
             rptabbr = keywords['Abbreviation']
             # query for '_abbreviations' array
-            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}})
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0}
                 candidates[cand['_id']]['wf'] += 2
@@ -103,9 +105,36 @@ class nmChemPropsAPI():
             # query for bag-of-character for only alphabets (use $regex '^0100020...')
             tradnameBOC = self.bagOfChar(rpttrad)
             tradnameBOCalph = tradnameBOC[:-10] # remove number's index
-        # 4) bag-of-character comparison for polymer names (in _stdname, _synonyms), wf 3
+            for cand in self.cp.polymer.find({'_boc': {'$regex': '^%s' %(tradnameBOCalph)}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1
+        # 4) bag-of-character comparison for polymer names (in _boc), wf 2
+        rptnameBOC = self.bagOfChar(rptname)
+        for cand in self.cp.polymer.find({'_boc': {'$regex': '%s' %(rptnameBOC)}}):
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 2
+        # only alphabets version, wf 1
+        rptnameBOCalph = rptnameBOC[:-10] # remove number's index
+        for cand in self.cp.polymer.find({'_boc': {'$regex': '^%s' %(rptnameBOCalph)}}):
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 1
         # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
-
+        # query for '_stdname' array
+        relBOWstd = self.containAllWords(rptname, '_stdname', self.cp.polymer)
+        for cand in relBOWstd:
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 2
+        relBOWsyn = self.containAllWords(rptname, '_synonyms', self.cp.polymer)
+        for cand in relBOWsyn:
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 2
+        # return the candidate with the highest wf
+        
     # this function querys collection.field array for the collections that
     # contain all of the alphabetic words in the query
     # input:
@@ -115,11 +144,10 @@ class nmChemPropsAPI():
     # output:
     #   candidates -- a list of collection dicts that meet the criteria
     def containAllWords(self, query, field, collection):
-        import re
-        import string
         pattern = re.compile('[^a-zA-Z]', re.UNICODE)
-        pattern.sub(' ', query) 
+        query = pattern.sub(' ', query)
         words = query.split()
+        print words
         ids = dict()
         for word in words:
             for result in collection.find({field: {'$regex': word, '$options':'i'}}):
@@ -130,6 +158,7 @@ class nmChemPropsAPI():
         output = []
         nWords = len(words)
         for cand in ids:
+            print cand
             if ids[cand]['freq'] == nWords:
                 output.append(ids[cand]['data'])
         return output
