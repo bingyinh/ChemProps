@@ -37,6 +37,15 @@ class nmChemPropsAPI():
             v = kv.split(':')[1].strip()
             self.env[k] = v
 
+    # a helper method to generate a bocStr for a string based on the occurrence
+    # of the chars. Example: (a,b,c,...,y,z,0,1,2,3,4,5,6,7,8,9) to 101214...01
+    def bagOfChar(self, myStr):
+        bag = []
+        for alphabet in string.ascii_lowercase:
+            bag.append(str(myStr.lower().count(alphabet)))
+        for number in string.digits:
+            bag.append(str(myStr.lower().count(number)))
+        return ''.join(bag)
     # the main search function for polymer infos
     # will call five sub-methods for mapping, wf stands for weighting factor
     # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
@@ -86,11 +95,25 @@ class nmChemPropsAPI():
         if 'TradeName' in keywords:
             rpttrad = keywords['TradeName']
             # query for '_tradenames' array
-            for cand in self.cp.polymer.find({'_tradenames': {'$regex': '/%s/' %(rpttrad), '$options': 'i'}})
+            relBOW = self.containAllWords(rpttrad, '_tradenames', self.cp.polymer)
+            for cand in relBOW:
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1
+            # query for bag-of-character for only alphabets (use $regex '^0100020...')
+            tradnameBOC = self.bagOfChar(rpttrad)
+            tradnameBOCalph = tradnameBOC[:-10] # remove number's index
         # 4) bag-of-character comparison for polymer names (in _stdname, _synonyms), wf 3
         # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
 
-
+    # this function querys collection.field array for the collections that
+    # contain all of the alphabetic words in the query
+    # input:
+    #   query ------- a string for query, e.g. "Poly[(polytetrahydrofuran 1000)-alt-(4,4'-diphenylmethane diisocynate)]"
+    #   field ------- the field to conduct search, e.g. "_tradenames"
+    #   collection -- the collection that contains the field, e.g. "self.cp.polymer"
+    # output:
+    #   candidates -- a list of collection dicts that meet the criteria
     def containAllWords(self, query, field, collection):
         import re
         import string
@@ -104,3 +127,9 @@ class nmChemPropsAPI():
                     ids[result['_id']] = {'data': result, 'freq': 0}
                 ids[result['_id']]['freq'] += 1
         # check if the length of words equals any of the freq in ids
+        output = []
+        nWords = len(words)
+        for cand in ids:
+            if ids[cand]['freq'] == nWords:
+                output.append(ids[cand]['data'])
+        return output
