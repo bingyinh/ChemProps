@@ -49,25 +49,38 @@ class nmChemPropsAPI():
             bag.append(str(myStr.lower().count(number)))
         return ''.join(bag)
     # the main search function for polymer infos
-    # will call five sub-methods for mapping, wf stands for weighting factor
+    # will call six sub-methods for mapping, wf stands for weighting factor
+    # 0) apple to apple comparison for uSMILES (already translated by SMILEStrans), wf 5
     # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
     # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2
     # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
     # 4) bag-of-character comparison for polymer names (in _boc), wf 2+1
     # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
     # input format:
-    #   {'ChemicalName': 'Poly(styrene)', 'Abbreviation': 'PS', 'TradeName': 'Dylite', 'uSMILE': ''}
+    #   {'ChemicalName': 'Poly(styrene)', 'Abbreviation': 'PS', 'TradeName': 'Dylite', 'uSMILES': ''}
     #   NanoMine schema guarantees 'ChemicalName' has minimum occurrence of 1
-    #   'Abbreviation', 'TradeName', and 'uSMILE' are not required, since users might leave them blank
+    #   'Abbreviation', 'TradeName', and 'uSMILES' are not required, since users might leave them blank
     # output format:
     # if there is a match:
-    #   {'StandardName': _stdname, 'uSMILE': _id, 'density': _density}
-    #   for multiple matches, return the one with highest cummulated wf
+    #   {'StandardName': _stdname, 'uSMILES': _id, 'density': _density}
+    #   for multiple matches, return the one with highest cummulated wfself.uk.polymer.find({"_inputsmiles": rptuSMILES})
     #   before exit, examine again whether the reported 'Abbreviation' and 'TradeName' are recorded in ChemProps, log them and manually check, if confirmed to be correct, add them to the google spreadsheet
     # if there is not a match:
     #   insert _inputname, _inputabbr, _inputsmiles, _nmid[] to unknowns.polymer
     def searchPolymers(self, keywords):
+        # init
+        rptuSMILES = ''
+        rptname = ''
+        rptabbr = ''
+        rpttrad = ''
         candidates = dict() # use '_id' as keys
+        # 0) apple to apple comparison for uSMILES (already translated by SMILEStrans), wf 5
+        if 'uSMILES' in keywords:
+            rptuSMILES = keywords['uSMILES']
+            for cand in self.cp.polymer.find({'_id': {'$regex': rptuSMILES, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 5
         # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
         rptname = keywords['ChemicalName']
         # query for '_stdname' with rptname
@@ -137,14 +150,122 @@ class nmChemPropsAPI():
         # if there is not a match:
         #   insert _inputname, _inputabbr, _inputsmiles, _nmid[] to unknowns.polymer
         if len(candidates) == 0:
-            
-    # if there is a match:
-    #   {'StandardName': _stdname, 'uSMILE': _id, 'density': _density}
-    #   for multiple matches, return the one with highest cummulated wf
-    #   before exit, examine again whether the reported 'Abbreviation' and 'TradeName' are recorded in ChemProps, log them and manually check, if confirmed to be correct, add them to the google spreadsheet
+            # prepare the insertion dict
+            ukdict = {'_nmid': [],
+                      '_inputname': [],
+                      '_inputabbr': [],
+                      '_inputtrade': [],
+                      '_inputsmiles': ''}
+            ukdict['_nmid'].append(self.nmid)
+            ukdict['_inputname'].append(rptname)
+            if len(rptabbr) > 0: ukdict['_inputabbr'].append(rptabbr)
+            if len(rpttrad) > 0: ukdict['_inputtrade'].append(rpttrad)
+            if len(rptuSMILES) > 0: # if smile reported, see if it's already in unknowns.polymer
+                ukdict['_inputsmiles'] = rptuSMILES
+                if self.uk.polymer.find({"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}}).count() == 0: # if not exist, create the document
+                    # insert it directly
+                    self.uk.polymer.insert(ukdict)
+                    logging.info("Insert unknown polymer with _inputsmiles: %s to unknowns." %(rptuSMILES))
+                else:
+                    # update the difference
+                    ukdata = self.uk.polymer.find({"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}})[0]
+                    if not self.lowerIn(rptname, ukdata['_inputname']):
+                        self.uk.polymer.update(
+                            {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
+                            {"$addToSet": { "_inputname": rptname}}
+                        )
+                        logging.warn("The document with _inputsmiles: %s has multiple _inputname! '%s' is newly added!" %(rptuSMILES, rptname))
+                    if len(rptabbr) > 0 and not self.lowerIn(rptabbr, ukdata['_inputabbr']):
+                        self.uk.polymer.update(
+                            {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
+                            {"$addToSet": { "_inputabbr": rptabbr}}
+                        )
+                        logging.info("Apply $addToSet with value %s to _inputabbr of the polymer with _inputsmiles: %s in unknowns."
+                                 %(rptabbr, rptuSMILES)
+                                )
+                    if len(rpttrad) > 0 and not self.lowerIn(rpttrad, ukdata['_inputtrade']):
+                        self.uk.polymer.update(
+                            {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
+                            {"$addToSet": { "_inputtrade": rpttrad}}
+                        )
+                        logging.info("Apply $addToSet with value %s to _inputtrade of the polymer with _inputsmiles: %s in unknowns."
+                                 %(rpttrad, rptuSMILES)
+                                )
+                    if not self.lowerIn(self.nmid, ukdata['_nmid']):
+                        self.uk.polymer.update(
+                            {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
+                            {"$addToSet": { "_nmid": self.nmid}}
+                        )
+                        logging.info("Apply $addToSet with value %s to _nmid of the polymer with _inputsmiles: %s in unknowns."
+                                 %(self.nmid, rptuSMILES)
+                                )
+                    else:
+                        logging.warn("The document with _inputsmiles: %s has duplicate in _nmid! Check '%s'!" %(rptuSMILES, self.nmid))
+            else: # if smile not reported, see if the _inputname is already in unknowns.polymer
+                if self.uk.polymer.find({"_inputname": {'$regex': '%s' %(rptname)}}).count() == 0: # if not exist, create the document
+                    # insert it directly
+                    self.uk.polymer.insert(ukdict)
+                    logging.info("Insert unknown polymer with _inputname: %s to unknowns. No _inputsmiles reported." %(rptname))
+                else:
+                    # update the difference
+                    ukdata = self.uk.polymer.find({"_inputname": {'$regex': '%s' %(rptname)}})[0]
+                    if len(rptabbr) > 0 and not self.lowerIn(rptabbr, ukdata['_inputabbr']):
+                        self.uk.polymer.update(
+                            {"_inputname": {'$regex': '%s' %(rptname)}},
+                            {"$addToSet": { "_inputabbr": rptabbr}}
+                        )
+                        logging.info("Apply $addToSet with value %s to _inputabbr of the polymer with _inputsmiles: N/A, _inputname: %s in unknowns."
+                                 %(rptabbr, rptname)
+                                )
+                    if len(rpttrad) > 0 and not self.lowerIn(rpttrad, ukdata['_inputtrade']):
+                        self.uk.polymer.update(
+                            {"_inputname": {'$regex': '%s' %(rptname)}},
+                            {"$addToSet": { "_inputtrade": rpttrad}}
+                        )
+                        logging.info("Apply $addToSet with value %s to _inputtrade of the polymer with _inputsmiles: N/A, _inputname: %s in unknowns."
+                                 %(rpttrad, rptname)
+                                )
+                    if not self.lowerIn(self.nmid, ukdata['_nmid']):
+                        self.uk.polymer.update(
+                            {"_inputname": {'$regex': '%s' %(rptname)}},
+                            {"$addToSet": { "_nmid": self.nmid}}
+                        )
+                        logging.info("Apply $addToSet with value %s to _nmid of the polymer with _inputsmiles: N/A, _inputname: %s in unknowns."
+                                 %(self.nmid, rptname)
+                                )
+                    else:
+                        logging.warn("The document with _inputsmiles: N/A, _inputname: %s has duplicate nmid! Check '%s'!" %(rptname, self.nmid))
+        # if there is a match:
+        #   {'StandardName': _stdname, 'uSMILES': _id, 'density': _density}
+        #   for multiple matches, return the one with highest cummulated wf
+        #   before exit, examine again whether the reported 'Abbreviation' and 'TradeName' are recorded in ChemProps, log them and manually check, if confirmed to be correct, add them to the google spreadsheet
+        else:
+            # find the candidate with the highest wf
+            wf_high = 0
+            cand_high = []
+            for cand in candidates:
+                if candidates[cand]['wf'] > wf_high:
+                    wf_high = candidates[cand]['wf']
+                    cand_high = [candidates[cand]]
+                elif candidates[cand]['wf'] == wf_high:
+                    cand_high.append(candidates[cand])
+            # always return the first cand_high, but log if there's more than one cand
+            if len(cand_high) > 1:
+                logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
+                for candidate in cand_high:
+                    logging.warn("\t%s" %(candidate['data']['_stdname']))
+            # now let's check whether the reported Abbreviation and Tradename are in the ChemProps
+            # log them, if they are manually confirmed to be correct, add them
+            # to the google sheet, and run nmChemPropsPrepare again. This way,
+            # the boc will be updated during nmChemPropsPrepare as well.
+            if len(rptabbr) > 0 and not self.lowerIn(rptabbr, cand_high[0]['data']['_abbreviations']):
+                logging.warn("Admins please check whether %s is the abbreviation of polymer %s." %(rptabbr, cand_high[0]['data']['_stdname']))
+            if len(rpttrad) > 0 and not self.lowerIn(rpttrad, cand_high[0]['data']['_tradenames']):
+                logging.warn("Admins please check whether %s is the tradename of polymer %s." %(rpttrad, cand_high[0]['data']['_stdname']))
+            return cand_high[0]['data']
+        # otherwise, return None
+        return None
 
-        # return the candidate with the highest wf
-        
     # this function querys collection.field array for the collections that
     # contain all of the alphabetic words in the query
     # input:
@@ -157,7 +278,6 @@ class nmChemPropsAPI():
         pattern = re.compile('[^a-zA-Z]', re.UNICODE)
         query = pattern.sub(' ', query)
         words = query.split()
-        print words
         ids = dict()
         for word in words:
             for result in collection.find({field: {'$regex': word, '$options':'i'}}):
@@ -172,3 +292,11 @@ class nmChemPropsAPI():
             if ids[cand]['freq'] == nWords:
                 output.append(ids[cand]['data'])
         return output
+
+    # this function checks whether the lower case of the given string myStr is
+    # contained in a given list myList
+    def lowerIn(self, myStr, myList):
+        for s in myList:
+            if myStr.lower() == s.lower():
+                return True
+        return False
