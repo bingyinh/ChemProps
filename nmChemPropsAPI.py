@@ -133,6 +133,16 @@ class nmChemPropsAPI():
             if cand['_id'] not in candidates:
                 candidates[cand['_id']] = {'data': cand, 'wf': 0}
             candidates[cand['_id']]['wf'] += 2
+        # end of the query part
+        # if there is not a match:
+        #   insert _inputname, _inputabbr, _inputsmiles, _nmid[] to unknowns.polymer
+        if len(candidates) == 0:
+            
+    # if there is a match:
+    #   {'StandardName': _stdname, 'uSMILE': _id, 'density': _density}
+    #   for multiple matches, return the one with highest cummulated wf
+    #   before exit, examine again whether the reported 'Abbreviation' and 'TradeName' are recorded in ChemProps, log them and manually check, if confirmed to be correct, add them to the google spreadsheet
+
         # return the candidate with the highest wf
         
     # this function querys collection.field array for the collections that
