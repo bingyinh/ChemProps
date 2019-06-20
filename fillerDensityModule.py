@@ -72,10 +72,37 @@ def getFillerDensityGoogle(filler):
                 return (stdname, b.text)
         return (stdname, -1)
     clean_result = re.sub(r'[^\x00-\x7F]+','',result.text).decode('utf-8','ignore').strip()
+    clean_result = unitAdjust(clean_result)
     # use capitalized filler as stdname if google don't have one
     if stdname == '':
         stdname = removeDescription(removeNano(filler)).lower().capitalize()
     return (stdname, clean_result)
+
+# adjust possible density units to g/cm3
+def unitAdjust(myStr):
+    # google will always compose something like 'float ?g/?m' <sup> 3 </sup> is ignored.
+    if '/' not in myStr or 'g' not in myStr.lower() or 'm' not in myStr.lower():
+        return myStr
+    noDig = re.sub(r'[0-9,.]', '', myStr.lower()) # remove all digits and the decimal
+    mass = noDig.split('/')[0]
+    volume = noDig.split('/')[-1]
+    if 'g' not in mass or 'm' not in volume:
+        return myStr
+    try:
+        density = float(myStr[:myStr.lower().find(mass)].strip())
+    except:
+        return myStr
+    if mass == 'kg':
+        density *= 1000
+    elif mass == 'mg':
+        density /= 1000
+    if volume == 'm':
+        density /= 1000000
+    elif volume == 'dm':
+        density /= 1000
+    elif volume == 'mm':
+        density *= 1000
+    return str(density)
 
 ## test
 if __name__ == '__main__':
