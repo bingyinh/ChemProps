@@ -6,6 +6,7 @@ from pymongo import MongoClient
 import logging
 import re # for query reformat
 import string # for query reformat
+from fillerDensityModule import getFillerDensityGoogle # filler density module
 
 class nmChemPropsAPI():
     def __init__(self, nmid):
@@ -48,6 +49,7 @@ class nmChemPropsAPI():
         for number in string.digits:
             bag.append(str(myStr.lower().count(number)))
         return ''.join(bag)
+    
     # the main search function for polymer infos
     # will call six sub-methods for mapping, wf stands for weighting factor
     # 0) apple to apple comparison for uSMILES (already translated by SMILEStrans), wf 5
@@ -262,6 +264,155 @@ class nmChemPropsAPI():
                 logging.warn("Admins please check whether '%s' is the abbreviation of polymer '%s'." %(rptabbr, cand_high[0]['data']['_stdname']))
             if len(rpttrad) > 0 and not self.lowerIn(rpttrad, cand_high[0]['data']['_tradenames']):
                 logging.warn("Admins please check whether '%s' is the tradename of polymer '%s'." %(rpttrad, cand_high[0]['data']['_stdname']))
+            return cand_high[0]['data']
+        # otherwise, return None
+        return None
+
+    # the main search function for filler infos
+    # will call six sub-methods for mapping, wf stands for weighting factor
+    # 0) apple to apple comparison for filler names (in _id, _alias), wf 3
+    # 1) bag-of-character comparison for filler names (in _boc), wf 2+1
+    # 2) relaxed bag-of-word comparison for filler names (in _id, _alias), wf 2
+    # input format:
+    #   {'ChemicalName': 'silicon dioxide'}
+    #   NanoMine schema guarantees 'ChemicalName' has minimum occurrence of 1
+    # output format:
+    # if there is a match:
+    #   {'StandardName': _id, 'density': _density}
+    #   for multiple matches, return the one with highest cummulated wf
+    # if there is not a match:
+    #   call getFillerDensityGoogle(filler) i.e. filler density module see if there's a result
+    #   if there is a result: returns (stdname, clean_result)
+    #       log it as warning
+    #       save it to ChemProps as
+    #       {'_id': stdname, '_density': float(clean_result), '_alias': [reported name]}
+    #   if there is not a result: return (stdname, -1)
+    #       insert _inputname, _rawname, _nmid[] to unknowns.filler
+    def searchFillers(self, keywords):
+        # init
+        rptname = ''
+        candidates = dict() # use '_id' as keys
+        # 0) apple to apple comparison for filler names (in _id, _alias), wf 3
+        rptname = keywords['ChemicalName']
+        # query for '_id' with rptname
+        for cand in self.cp.filler.find({'_id': {'$regex': rptname, '$options': 'i'}}):
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 3
+        # query for '_alias' array
+        for cand in self.cp.filler.find({'_alias': {'$regex': rptname, '$options': 'i'}}):
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 3
+        # 1) bag-of-character comparison for filler names (in _boc), wf 2
+        rptnameBOC = self.bagOfChar(rptname)
+        for cand in self.cp.filler.find({'_boc': {'$regex': '%s' %(rptnameBOC)}}):
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 2
+        # only alphabets version, wf 1
+        rptnameBOCalph = rptnameBOC[:-10] # remove number's index
+        for cand in self.cp.filler.find({'_boc': {'$regex': '^%s' %(rptnameBOCalph)}}):
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 1
+        # 2) relaxed bag-of-word comparison for filler names (in _id, _alias), wf 2
+        # query for '_id'
+        relBOWstd = self.containAllWords(rptname, '_id', self.cp.filler)
+        for cand in relBOWstd:
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 2
+        relBOWsyn = self.containAllWords(rptname, '_alias', self.cp.filler)
+        for cand in relBOWsyn:
+            if cand['_id'] not in candidates:
+                candidates[cand['_id']] = {'data': cand, 'wf': 0}
+            candidates[cand['_id']]['wf'] += 2
+        # end of the query part
+        # if there is not a match:
+        #   call getFillerDensityGoogle(filler) i.e. filler density module see if there's a result
+        if len(candidates) == 0:
+            googleResult = getFillerDensityGoogle(rptname)
+            stdname, clean_result = googleResult
+            #   if there is a result: returns (stdname, clean_result)
+            #       log it as warning
+            #       save it to ChemProps as
+            #       {'_id': stdname, '_density': float(clean_result), '_alias': [reported name]}
+            if type(clean_result) != int:
+                logging.warn("Filler density module find stdname '%s' and density '%s' for reported ChemicalName '%s'. Please verify." %(stdname, clean_result, rptname))
+                clean_result = float(clean_result)
+                # double check the existance of stdname in ChemProps.filler
+                if self.cp.filler.find({"_id": {'$regex': '%s' %(stdname), '$options': 'i'}}).count() == 0:
+                    # if stdname does not exist in ChemProps, insert it
+                    resultDict = {"_id": stdname,
+                                  "_density": clean_result,
+                                  "_alias": [rptname],
+                                  "_boc": [self.bagOfChar(stdname), self.bagOfChar(rptname)]
+                                 }
+                    self.cp.filler.insert(resultDict)
+                    logging.warn("Filler density module results are inserted into ChemProps with '_id': '%s'. Please double check!" %(stdname))
+                    return resultDict
+                else:
+                    # if stdname exists in ChemProps, i.e. we fail to identify the equivalence of rptname and stdname, just add rptname to alias will be enough
+                    self.cp.filler.update(
+                        {"_id": {'$regex': '%s' %(stdname), '$options': 'i'}},
+                        {"$addToSet": {"_alias": rptname}}
+                    )
+                    logging.warn("Apply $addToSet with value '%s' to _alias of the filler with _id: '%s' in ChemProps." %(rptname, stdname))
+                    return self.cp.filler.find({"_id": {'$regex': '%s' %(stdname), '$options': 'i'}})[0]
+            #   if there is not a result: return (stdname, -1)
+            #       insert _inputname, _rawname, _nmid[] to unknowns.filler
+            else:
+                # prepare the insertion dict
+                ukdict = {'_nmid': [],
+                          '_inputname': stdname,
+                          '_rawname': []}
+                ukdict['_nmid'].append(self.nmid)
+                ukdict['_rawname'].append(rptname)
+                # see if the _inputname is already in unknowns.filler
+                if self.uk.filler.find({"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}}).count() == 0: # if not exist, create the document
+                    # insert it directly
+                    self.uk.filler.insert(ukdict)
+                    logging.info("Insert unknown filler with _inputname: '%s' to unknowns." %(stdname))
+                else:
+                    # update the difference
+                    ukdata = self.uk.filler.find({"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}})[0]
+                    if not self.lowerIn(rptname, ukdata['_rawname']):
+                        self.uk.filler.update(
+                            {"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}},
+                            {"$addToSet": { "_rawname": rptname}}
+                        )
+                        logging.info("Apply $addToSet with value '%s' to _rawname of the filler with _inputname: '%s' in unknowns."
+                                 %(rptname, stdname)
+                                )
+                    if not self.lowerIn(self.nmid, ukdata['_nmid']):
+                        self.uk.filler.update(
+                            {"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}},
+                            {"$addToSet": { "_nmid": self.nmid}}
+                        )
+                        logging.info("Apply $addToSet with value '%s' to _nmid of the filler with _inputname: '%s' in unknowns."
+                                 %(self.nmid, stdname)
+                                )
+                    else:
+                        logging.warn("The document with _inputname: '%s' has duplicate in _nmid! Check '%s'!" %(stdname, self.nmid))
+        # if there is a match:
+        #   {'StandardName': _id, 'density': _density}
+        #   for multiple matches, return the one with highest cummulated wf
+        else:
+            # find the candidate with the highest wf
+            wf_high = 0
+            cand_high = []
+            for cand in candidates:
+                if candidates[cand]['wf'] > wf_high:
+                    wf_high = candidates[cand]['wf']
+                    cand_high = [candidates[cand]]
+                elif candidates[cand]['wf'] == wf_high:
+                    cand_high.append(candidates[cand])
+            # always return the first cand_high, but log if there's more than one cand
+            if len(cand_high) > 1:
+                logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
+                for candidate in cand_high:
+                    logging.warn("\t%s" %(candidate['data']['_id']))
             return cand_high[0]['data']
         # otherwise, return None
         return None
