@@ -274,8 +274,9 @@ class nmChemPropsAPI():
     # 1) bag-of-character comparison for filler names (in _boc), wf 2+1
     # 2) relaxed bag-of-word comparison for filler names (in _id, _alias), wf 1
     # input format:
-    #   {'ChemicalName': 'silicon dioxide'}
+    #   {'ChemicalName': 'silicon dioxide', 'Abbreviation': 'silica', 'TradeName': 'something'}
     #   NanoMine schema guarantees 'ChemicalName' has minimum occurrence of 1
+    #   'Abbreviation' and 'TradeName'are not required, since users might leave them blank
     # output format:
     # if there is a match:
     #   {'StandardName': _id, 'density': _density}
