@@ -54,7 +54,7 @@ class nmChemPropsAPI():
     # will call six sub-methods for mapping, wf stands for weighting factor
     # 0) apple to apple comparison for uSMILES (already translated by SMILEStrans), wf 5
     # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
-    # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2
+    # 2) apple to apple/boc comparison for abbreviations (in _abbreviations), wf 2+1
     # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
     # 4) bag-of-character comparison for polymer names (in _boc), wf 2+1
     # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
@@ -100,14 +100,20 @@ class nmChemPropsAPI():
             if cand['_id'] not in candidates:
                 candidates[cand['_id']] = {'data': cand, 'wf': 0}
             candidates[cand['_id']]['wf'] += 3
-        # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2
+        # 2) apple to apple comparison/boc for abbreviations (in _abbreviations), wf 2+1
         if 'Abbreviation' in keywords:
             rptabbr = keywords['Abbreviation']
-            # query for '_abbreviations' array
+            # query for '_abbreviations' array, wf 2
             for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0}
                 candidates[cand['_id']]['wf'] += 2
+            # boc, wf 1
+            rptabbrBOC = self.bagOfChar(rptabbr)
+            for cand in self.cp.polymer.find({'_boc': {'$regex': rptabbrBOC}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1            
         # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
         if 'TradeName' in keywords:
             rpttrad = keywords['TradeName']
