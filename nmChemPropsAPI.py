@@ -259,9 +259,10 @@ class nmChemPropsAPI():
                     cand_high.append(candidates[cand])
             # always return the first cand_high, but log if there's more than one cand
             if len(cand_high) > 1:
-                logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
+                tieWarning = "For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high)
                 for candidate in cand_high:
-                    logging.warn("\t%s" %(candidate['data']['_stdname']))
+                    tieWarning += "\n\t%s" %(candidate['data']['_stdname'])
+                logging.warn(tieWarning)
             # warn admin if wf_high is no bigger than 2
             if wf_high <= 2:
                 logging.warn("Careful! Low weighting factor %d for nmid '%s'! Mapped _inputname: '%s' with _stdname: '%s'." %(wf_high, self.nmid, rptname, cand_high[0]['data']['_stdname']))
@@ -422,9 +423,10 @@ class nmChemPropsAPI():
                     cand_high.append(candidates[cand])
             # always return the first cand_high, but log if there's more than one cand
             if len(cand_high) > 1:
-                logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
+                tieWarning = "For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high)
                 for candidate in cand_high:
-                    logging.warn("\t%s" %(candidate['data']['_id']))
+                    tieWarning += "\n\t%s" %(candidate['data']['_id'])
+                logging.warn(tieWarning)
             # warn admin if wf_high is no bigger than 2
             if wf_high <= 2:
                 logging.warn("Careful! Low weighting factor %d for nmid '%s'! Mapped _inputname: '%s' with _stdname: '%s'." %(wf_high, self.nmid, rptname, cand_high[0]['data']['_id']))
