@@ -262,6 +262,9 @@ class nmChemPropsAPI():
                 logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
                 for candidate in cand_high:
                     logging.warn("\t%s" %(candidate['data']['_stdname']))
+            # warn admin if wf_high is no bigger than 2
+            if wf_high <= 2:
+                logging.warn("Careful! Low weighting factor %d for nmid '%s'! Mapped _inputname: '%s' with _stdname: '%s'." %(wf_high, self.nmid, rptname, cand_high[0]['data']['_stdname']))
             # now let's check whether the reported Abbreviation and Tradename are in the ChemProps
             # log them, if they are manually confirmed to be correct, add them
             # to the google sheet, and run nmChemPropsPrepare again. This way,
@@ -422,11 +425,10 @@ class nmChemPropsAPI():
                 logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
                 for candidate in cand_high:
                     logging.warn("\t%s" %(candidate['data']['_id']))
-            # only return data with cumulative wf >= 3
-            if cand_high[0]['wf'] >= 3:
-                return cand_high[0]['data']
-            else:
-                logging.warn("'%s' is not considered a match for the filler '%s' due to a weighting factor no greater than 3." %(cand_high[0]['data']['_id'], rptname))
+            # warn admin if wf_high is no bigger than 2
+            if wf_high <= 2:
+                logging.warn("Careful! Low weighting factor %d for nmid '%s'! Mapped _inputname: '%s' with _stdname: '%s'." %(wf_high, self.nmid, rptname, cand_high[0]['data']['_id']))
+            return cand_high[0]['data']
         # otherwise, return None
         return None
 
