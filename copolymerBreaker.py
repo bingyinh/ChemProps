@@ -96,3 +96,6 @@ if __name__ == '__main__':
     cB3 = copolymerBreaker("poly[chlorotrifluoroethylene-co-trifluoroethylene-co-(vinylidene fluoride)]")
     cB3.run()
     print(cB3.output)
+    cB4 = copolymerBreaker("poly(2-vinyl pyridine)")
+    cB4.run()
+    print(cB4.output)
