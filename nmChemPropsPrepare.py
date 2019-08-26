@@ -28,9 +28,13 @@ class nmChemPropsPrepare():
         self.prepFiller()
         self.prepPolymer()
         # mongo init
-        self.client = MongoClient('mongodb://%s:%s@localhost:27017/tracking?authSource=admin'
+        # self.client = MongoClient('mongodb://%s:%s@%s:%s/tracking?authSource=admin'
+        self.client = MongoClient('mongodb://%s:%s@%s:%s/%s'
                                   %(self.env['NM_MONGO_USER'],
-                                    self.env['NM_MONGO_PWD']
+                                    self.env['NM_MONGO_PWD'],
+                                    self.env['NM_MONGO_HOST'],
+                                    self.env['NM_MONGO_PORT'],
+                                    self.env['NM_MONGO_DB']
                                    )
                                  )
 
@@ -148,7 +152,7 @@ class nmChemPropsPrepare():
         dbnames = self.client.list_database_names() # check if db exists
         initPolymer = False # a flag inidicating whether this is the first time creating the ChemProps.polymer collection
         initFiller = False # a flag inidicating whether this is the first time creating the ChemProps.filler collection
-        if u'ChemProps' not in dbnames:
+        if 'ChemProps' not in dbnames:
             initPolymer = True
             initFiller = True
         cp = self.client.ChemProps
@@ -161,7 +165,7 @@ class nmChemPropsPrepare():
         ## first creation cases (polymer)
         if initPolymer:
             pol = cp.polymer
-            posted_polymer = pol.insert_many(self.polymer.values())
+            posted_polymer = pol.insert_many(list(self.polymer.values()))
             logging.info("The polymer collection in the ChemProps DB is created for the first time.")
         ## update cases (polymer)
         else:
@@ -224,7 +228,7 @@ class nmChemPropsPrepare():
         ## first creation cases (filler)
         if initFiller:
             fil = cp.filler
-            posted_filler = fil.insert_many(self.filler.values())
+            posted_filler = fil.insert_many(list(self.filler.values()))
             logging.info("The filler collection in the ChemProps DB is created for the first time.")
         ## update cases (filler)
         else:
