@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # 06/04/2019 Bingyin Hu
 
@@ -19,14 +19,17 @@ class nmChemPropsAPI():
                            )
         self.loadMGconfig()
         # mongo init
-        self.client = MongoClient('mongodb://%s:%s@localhost:27017/tracking?authSource=admin'
+        # self.client = MongoClient('mongodb://%s:%s@localhost:27017/tracking?authSource=admin'
+        self.client = MongoClient('mongodb://%s:%s@%s:%s/%s'
                                   %(self.env['NM_MONGO_USER'],
-                                    self.env['NM_MONGO_PWD']
+                                    self.env['NM_MONGO_PWD'],
+                                    self.env['NM_MONGO_HOST'],
+                                    self.env['NM_MONGO_PORT'],
+                                    self.env['NM_MONGO_DB']
                                    )
                                  )
         # access to DBs
         self.cp = self.client.ChemProps
-        self.uk = self.client.unknowns
         
     # load mongo configurations
     def loadMGconfig(self):
@@ -42,12 +45,13 @@ class nmChemPropsAPI():
 
     # a helper method to generate a bocStr for a string based on the occurrence
     # of the chars. Example: (a,b,c,...,y,z,0,1,2,3,4,5,6,7,8,9) to 101214...01
+    # The occurrence is capped by 9.
     def bagOfChar(self, myStr):
         bag = []
         for alphabet in string.ascii_lowercase:
-            bag.append(str(myStr.lower().count(alphabet)))
+            bag.append(str(min(9, myStr.lower().count(alphabet))))
         for number in string.digits:
-            bag.append(str(myStr.lower().count(number)))
+            bag.append(str(min(9, myStr.lower().count(number))))
         return ''.join(bag)
     
     # the main search function for polymer infos
@@ -65,8 +69,9 @@ class nmChemPropsAPI():
     # output format:
     # if there is a match:
     #   {'StandardName': _stdname, 'uSMILES': _id, 'density': _density}
-    #   for multiple matches, return the one with highest cummulated wfself.uk.polymer.find({"_inputsmiles": rptuSMILES})
-    #   before exit, examine again whether the reported 'Abbreviation' and 'TradeName' are recorded in ChemProps, log them and manually check, if confirmed to be correct, add them to the google spreadsheet
+    #   for multiple matches, return the one with highest cummulated wf 
+    #   self.cp.ukpolymer.find({"_inputsmiles": rptuSMILES}) before exit,
+    #   examine again whether the reported 'Abbreviation' and 'TradeName' are recorded in ChemProps, log them and manually check, if confirmed to be correct, add them to the google spreadsheet
     # if there is not a match:
     #   insert _inputname, _inputabbr, _inputsmiles, _nmid[] to unknowns.polymer
     def searchPolymers(self, keywords):
@@ -100,7 +105,7 @@ class nmChemPropsAPI():
             if cand['_id'] not in candidates:
                 candidates[cand['_id']] = {'data': cand, 'wf': 0}
             candidates[cand['_id']]['wf'] += 3
-        # 2) apple to apple comparison/boc for abbreviations (in _abbreviations), wf 2+1
+        # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2+1
         if 'Abbreviation' in keywords:
             rptabbr = keywords['Abbreviation']
             # query for '_abbreviations' array, wf 2
@@ -113,7 +118,7 @@ class nmChemPropsAPI():
             for cand in self.cp.polymer.find({'_boc': {'$regex': rptabbrBOC}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0}
-                candidates[cand['_id']]['wf'] += 1            
+                candidates[cand['_id']]['wf'] += 1  
         # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
         if 'TradeName' in keywords:
             rpttrad = keywords['TradeName']
@@ -170,21 +175,21 @@ class nmChemPropsAPI():
             if len(rpttrad) > 0: ukdict['_inputtrade'].append(rpttrad)
             if len(rptuSMILES) > 0: # if smile reported, see if it's already in unknowns.polymer
                 ukdict['_inputsmiles'] = rptuSMILES
-                if self.uk.polymer.find({"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}}).count() == 0: # if not exist, create the document
+                if self.cp.ukpolymer.find({"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}}).count() == 0: # if not exist, create the document
                     # insert it directly
-                    self.uk.polymer.insert(ukdict)
+                    self.cp.ukpolymer.insert(ukdict)
                     logging.info("Insert unknown polymer with _inputsmiles: '%s' to unknowns." %(rptuSMILES))
                 else:
                     # update the difference
-                    ukdata = self.uk.polymer.find({"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}})[0]
+                    ukdata = self.cp.ukpolymer.find({"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}})[0]
                     if not self.lowerIn(rptname, ukdata['_inputname']):
-                        self.uk.polymer.update(
+                        self.cp.ukpolymer.update(
                             {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
                             {"$addToSet": { "_inputname": rptname}}
                         )
                         logging.warn("The document with _inputsmiles: '%s' has multiple _inputname! '%s' is newly added!" %(rptuSMILES, rptname))
                     if len(rptabbr) > 0 and not self.lowerIn(rptabbr, ukdata['_inputabbr']):
-                        self.uk.polymer.update(
+                        self.cp.ukpolymer.update(
                             {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
                             {"$addToSet": { "_inputabbr": rptabbr}}
                         )
@@ -192,7 +197,7 @@ class nmChemPropsAPI():
                                  %(rptabbr, rptuSMILES)
                                 )
                     if len(rpttrad) > 0 and not self.lowerIn(rpttrad, ukdata['_inputtrade']):
-                        self.uk.polymer.update(
+                        self.cp.ukpolymer.update(
                             {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
                             {"$addToSet": { "_inputtrade": rpttrad}}
                         )
@@ -200,7 +205,7 @@ class nmChemPropsAPI():
                                  %(rpttrad, rptuSMILES)
                                 )
                     if not self.lowerIn(self.nmid, ukdata['_nmid']):
-                        self.uk.polymer.update(
+                        self.cp.ukpolymer.update(
                             {"_inputsmiles": {'$regex': '%s' %(rptuSMILES)}},
                             {"$addToSet": { "_nmid": self.nmid}}
                         )
@@ -210,15 +215,15 @@ class nmChemPropsAPI():
                     else:
                         logging.warn("The document with _inputsmiles: '%s' has duplicate in _nmid! Check '%s'!" %(rptuSMILES, self.nmid))
             else: # if smile not reported, see if the _inputname is already in unknowns.polymer
-                if self.uk.polymer.find({"_inputname": {'$regex': '%s' %(rptname)}}).count() == 0: # if not exist, create the document
+                if self.cp.ukpolymer.find({"_inputname": {'$regex': '%s' %(rptname)}}).count() == 0: # if not exist, create the document
                     # insert it directly
-                    self.uk.polymer.insert(ukdict)
+                    self.cp.ukpolymer.insert(ukdict)
                     logging.info("Insert unknown polymer with _inputname: '%s' to unknowns. No _inputsmiles reported." %(rptname))
                 else:
                     # update the difference
-                    ukdata = self.uk.polymer.find({"_inputname": {'$regex': '%s' %(rptname)}})[0]
+                    ukdata = self.cp.ukpolymer.find({"_inputname": {'$regex': '%s' %(rptname)}})[0]
                     if len(rptabbr) > 0 and not self.lowerIn(rptabbr, ukdata['_inputabbr']):
-                        self.uk.polymer.update(
+                        self.cp.ukpolymer.update(
                             {"_inputname": {'$regex': '%s' %(rptname)}},
                             {"$addToSet": { "_inputabbr": rptabbr}}
                         )
@@ -226,7 +231,7 @@ class nmChemPropsAPI():
                                  %(rptabbr, rptname)
                                 )
                     if len(rpttrad) > 0 and not self.lowerIn(rpttrad, ukdata['_inputtrade']):
-                        self.uk.polymer.update(
+                        self.cp.ukpolymer.update(
                             {"_inputname": {'$regex': '%s' %(rptname)}},
                             {"$addToSet": { "_inputtrade": rpttrad}}
                         )
@@ -234,7 +239,7 @@ class nmChemPropsAPI():
                                  %(rpttrad, rptname)
                                 )
                     if not self.lowerIn(self.nmid, ukdata['_nmid']):
-                        self.uk.polymer.update(
+                        self.cp.ukpolymer.update(
                             {"_inputname": {'$regex': '%s' %(rptname)}},
                             {"$addToSet": { "_nmid": self.nmid}}
                         )
@@ -383,15 +388,15 @@ class nmChemPropsAPI():
                 ukdict['_nmid'].append(self.nmid)
                 ukdict['_rawname'].append(rptname)
                 # see if the _inputname is already in unknowns.filler
-                if self.uk.filler.find({"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}}).count() == 0: # if not exist, create the document
+                if self.cp.ukfiller.find({"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}}).count() == 0: # if not exist, create the document
                     # insert it directly
-                    self.uk.filler.insert(ukdict)
+                    self.cp.ukfiller.insert(ukdict)
                     logging.info("Insert unknown filler with _inputname: '%s' to unknowns." %(stdname))
                 else:
                     # update the difference
-                    ukdata = self.uk.filler.find({"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}})[0]
+                    ukdata = self.cp.ukfiller.find({"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}})[0]
                     if not self.lowerIn(rptname, ukdata['_rawname']):
-                        self.uk.filler.update(
+                        self.cp.ukfiller.update(
                             {"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}},
                             {"$addToSet": { "_rawname": rptname}}
                         )
@@ -399,7 +404,7 @@ class nmChemPropsAPI():
                                  %(rptname, stdname)
                                 )
                     if not self.lowerIn(self.nmid, ukdata['_nmid']):
-                        self.uk.filler.update(
+                        self.cp.ukfiller.update(
                             {"_inputname": {'$regex': '%s' %(stdname), '$options': 'i'}},
                             {"$addToSet": { "_nmid": self.nmid}}
                         )
@@ -430,7 +435,7 @@ class nmChemPropsAPI():
             # warn admin if wf_high is no bigger than 2
             if wf_high <= 2:
                 logging.warn("Careful! Low weighting factor %d for nmid '%s'! Mapped _inputname: '%s' with _stdname: '%s'." %(wf_high, self.nmid, rptname, cand_high[0]['data']['_id']))
-            return cand_high[0]['data']
+            return cand_high[0]['data']       
         # otherwise, return None
         return None
 
