@@ -54,7 +54,7 @@ class nmChemPropsAPI():
     # will call six sub-methods for mapping, wf stands for weighting factor
     # 0) apple to apple comparison for uSMILES (already translated by SMILEStrans), wf 5
     # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
-    # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2
+    # 2) apple to apple/boc comparison for abbreviations (in _abbreviations), wf 2+1
     # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
     # 4) bag-of-character comparison for polymer names (in _boc), wf 2+1
     # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
@@ -100,14 +100,20 @@ class nmChemPropsAPI():
             if cand['_id'] not in candidates:
                 candidates[cand['_id']] = {'data': cand, 'wf': 0}
             candidates[cand['_id']]['wf'] += 3
-        # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2
+        # 2) apple to apple comparison/boc for abbreviations (in _abbreviations), wf 2+1
         if 'Abbreviation' in keywords:
             rptabbr = keywords['Abbreviation']
-            # query for '_abbreviations' array
+            # query for '_abbreviations' array, wf 2
             for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0}
                 candidates[cand['_id']]['wf'] += 2
+            # boc, wf 1
+            rptabbrBOC = self.bagOfChar(rptabbr)
+            for cand in self.cp.polymer.find({'_boc': {'$regex': rptabbrBOC}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1            
         # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
         if 'TradeName' in keywords:
             rpttrad = keywords['TradeName']
@@ -253,9 +259,13 @@ class nmChemPropsAPI():
                     cand_high.append(candidates[cand])
             # always return the first cand_high, but log if there's more than one cand
             if len(cand_high) > 1:
-                logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
+                tieWarning = "For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high)
                 for candidate in cand_high:
-                    logging.warn("\t%s" %(candidate['data']['_stdname']))
+                    tieWarning += "\n\t%s" %(candidate['data']['_stdname'])
+                logging.warn(tieWarning)
+            # warn admin if wf_high is no bigger than 2
+            if wf_high <= 2:
+                logging.warn("Careful! Low weighting factor %d for nmid '%s'! Mapped _inputname: '%s' with _stdname: '%s'." %(wf_high, self.nmid, rptname, cand_high[0]['data']['_stdname']))
             # now let's check whether the reported Abbreviation and Tradename are in the ChemProps
             # log them, if they are manually confirmed to be correct, add them
             # to the google sheet, and run nmChemPropsPrepare again. This way,
@@ -413,14 +423,14 @@ class nmChemPropsAPI():
                     cand_high.append(candidates[cand])
             # always return the first cand_high, but log if there's more than one cand
             if len(cand_high) > 1:
-                logging.warn("For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high))
+                tieWarning = "For the search package '%s', multiple winning matches found. Weighting factors tie at %d. They are:" %(str(keywords), wf_high)
                 for candidate in cand_high:
-                    logging.warn("\t%s" %(candidate['data']['_id']))
-            # only return data with cumulative wf >= 3
-            if cand_high[0]['wf'] >= 3:
-                return cand_high[0]['data']
-            else:
-                logging.warn("'%s' is not considered a match for the filler '%s' due to a weighting factor no greater than 3." %(cand_high[0]['data']['_id'], rptname))
+                    tieWarning += "\n\t%s" %(candidate['data']['_id'])
+                logging.warn(tieWarning)
+            # warn admin if wf_high is no bigger than 2
+            if wf_high <= 2:
+                logging.warn("Careful! Low weighting factor %d for nmid '%s'! Mapped _inputname: '%s' with _stdname: '%s'." %(wf_high, self.nmid, rptname, cand_high[0]['data']['_id']))
+            return cand_high[0]['data']
         # otherwise, return None
         return None
 
