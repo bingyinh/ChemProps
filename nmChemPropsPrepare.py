@@ -61,7 +61,7 @@ class nmChemPropsPrepare():
     # load mongo configurations
     def loadMGconfig(self):
         self.env = dict()
-        cpuri = os.get('NM_MONGO_CHEMPROPS_URI', None)
+        cpuri = os.environ.get('NM_MONGO_CHEMPROPS_URI', None)
         if cpuri:
             self.env['NM_MONGO_CHEMPROPS_URI'] = cpuri
         else:
