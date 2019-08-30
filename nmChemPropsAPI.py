@@ -3,6 +3,7 @@
 # 06/04/2019 Bingyin Hu
 
 from pymongo import MongoClient
+import os
 import logging
 import re # for query reformat
 import string # for query reformat
@@ -20,7 +21,10 @@ class nmChemPropsAPI():
         self.loadMGconfig()
         # mongo init
         # self.client = MongoClient('mongodb://%s:%s@localhost:27017/tracking?authSource=admin'
-        self.client = MongoClient('mongodb://%s:%s@%s:%s/%s'
+        if 'NM_MONGO_CHEMPROPS_URI' in self.env:
+            self.client = MongoClient(self.env['NM_MONGO_CHEMPROPS_URI'])
+        else:
+            self.client = MongoClient('mongodb://%s:%s@%s:%s/%s'
                                   %(self.env['NM_MONGO_USER'],
                                     self.env['NM_MONGO_PWD'],
                                     self.env['NM_MONGO_HOST'],
@@ -34,14 +38,18 @@ class nmChemPropsAPI():
     # load mongo configurations
     def loadMGconfig(self):
         self.env = dict()
-        # read mongo.config for configurations
-        with open("mongo.config", "r") as f:
-            confs = f.read().split('\n')
-        for i in range(len(confs)):
-            kv = confs[i]
-            k = kv.split(':')[0].strip()
-            v = kv.split(':')[1].strip()
-            self.env[k] = v
+        cpuri = os.get('NM_MONGO_CHEMPROPS_URI', None)
+        if cpuri:
+            self.env['NM_MONGO_CHEMPROPS_URI'] = cpuri
+        else:
+            # read mongo.config for configurations
+            with open("mongo.config", "r") as f:
+                confs = f.read().split('\n')
+            for i in range(len(confs)):
+                kv = confs[i]
+                k = kv.split(':')[0].strip()
+                v = kv.split(':')[1].strip()
+                self.env[k] = v
 
     # a helper method to generate a bocStr for a string based on the occurrence
     # of the chars. Example: (a,b,c,...,y,z,0,1,2,3,4,5,6,7,8,9) to 101214...01
