@@ -157,10 +157,13 @@ class nmChemPropsPrepare():
 
     # update MongoDB
     def updateMongoDB(self):
-        dbnames = self.client.list_database_names() # check if db exists
         initPolymer = False # a flag inidicating whether this is the first time creating the ChemProps.polymer collection
         initFiller = False # a flag inidicating whether this is the first time creating the ChemProps.filler collection
-        if 'ChemProps' not in dbnames:
+        if 'NM_MONGO_CHEMPROPS_URI' not in self.env :
+          dbnames = self.client.list_database_names() # check if db exists (not strictly necessary.
+                                                      # checking for collections within db is sufficient and does not require
+                                                      # special privileges.
+          if 'ChemProps' not in dbnames:
             initPolymer = True
             initFiller = True
         cp = self.client.ChemProps
