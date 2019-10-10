@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 
 # 08/19/2019 Bingyin Hu
 # This module detects copolymer nomenclatures by IUPAC and returns a package

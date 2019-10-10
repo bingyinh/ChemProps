@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # 06/04/2019 Bingyin Hu
 
@@ -7,6 +7,7 @@ import xlrd
 from pymongo import MongoClient
 import logging
 import string
+import os
 
 class nmChemPropsPrepare():
     def __init__(self):
@@ -29,14 +30,17 @@ class nmChemPropsPrepare():
         self.prepPolymer()
         # mongo init
         # self.client = MongoClient('mongodb://%s:%s@%s:%s/tracking?authSource=admin'
-        self.client = MongoClient('mongodb://%s:%s@%s:%s/%s'
-                                  %(self.env['NM_MONGO_USER'],
-                                    self.env['NM_MONGO_PWD'],
-                                    self.env['NM_MONGO_HOST'],
-                                    self.env['NM_MONGO_PORT'],
-                                    self.env['NM_MONGO_DB']
-                                   )
-                                 )
+        if 'NM_MONGO_CHEMPROPS_URI' in self.env:
+            self.client = MongoClient(self.env['NM_MONGO_CHEMPROPS_URI'])
+        else:
+            self.client = MongoClient('mongodb://%s:%s@%s:%s/%s'
+                                      %(self.env['NM_MONGO_USER'],
+                                        self.env['NM_MONGO_PWD'],
+                                        self.env['NM_MONGO_HOST'],
+                                        self.env['NM_MONGO_PORT'],
+                                        self.env['NM_MONGO_DB']
+                                        )
+                                      )
 
     # load google spreadsheet configurations
     def loadGSconfig(self):
@@ -57,14 +61,18 @@ class nmChemPropsPrepare():
     # load mongo configurations
     def loadMGconfig(self):
         self.env = dict()
-        # read mongo.config for configurations
-        with open("mongo.config", "r") as f:
-            confs = f.read().split('\n')
-        for i in range(len(confs)):
-            kv = confs[i]
-            k = kv.split(':')[0].strip()
-            v = kv.split(':')[1].strip()
-            self.env[k] = v
+        cpuri = os.environ.get('NM_MONGO_CHEMPROPS_URI', None)
+        if cpuri:
+            self.env['NM_MONGO_CHEMPROPS_URI'] = cpuri
+        else:
+            # read mongo.config for configurations
+            with open("mongo.config", "r") as f:
+                confs = f.read().split('\n')
+            for i in range(len(confs)):
+                kv = confs[i]
+                k = kv.split(':')[0].strip()
+                v = kv.split(':')[1].strip()
+                self.env[k] = v
 
     # download google spreadsheets
     def downloadGS(self):
@@ -149,10 +157,13 @@ class nmChemPropsPrepare():
 
     # update MongoDB
     def updateMongoDB(self):
-        dbnames = self.client.list_database_names() # check if db exists
         initPolymer = False # a flag inidicating whether this is the first time creating the ChemProps.polymer collection
         initFiller = False # a flag inidicating whether this is the first time creating the ChemProps.filler collection
-        if 'ChemProps' not in dbnames:
+        if 'NM_MONGO_CHEMPROPS_URI' not in self.env :
+          dbnames = self.client.list_database_names() # check if db exists (not strictly necessary.
+                                                      # checking for collections within db is sufficient and does not require
+                                                      # special privileges.
+          if 'ChemProps' not in dbnames:
             initPolymer = True
             initFiller = True
         cp = self.client.ChemProps
