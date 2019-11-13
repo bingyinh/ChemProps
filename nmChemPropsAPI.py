@@ -8,6 +8,7 @@ import logging
 import re # for query reformat
 import string # for query reformat
 import fillerDensityModule as fDM # filler density module
+from SMILEStrans import SMILEStrans # uSMILES translation module
 
 class nmChemPropsAPI():
     def __init__(self, nmid):
@@ -64,7 +65,7 @@ class nmChemPropsAPI():
     
     # the main search function for polymer infos
     # will call six sub-methods for mapping, wf stands for weighting factor
-    # 0) apple to apple comparison for uSMILES (already translated by SMILEStrans), wf 5
+    # 0) apple to apple comparison for uSMILES (translate here by SMILEStrans), wf 5
     # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
     # 2) apple to apple/boc comparison for abbreviations (in _abbreviations), wf 2+1
     # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
@@ -89,9 +90,15 @@ class nmChemPropsAPI():
         rptabbr = ''
         rpttrad = ''
         candidates = dict() # use '_id' as keys
-        # 0) apple to apple comparison for uSMILES (already translated by SMILEStrans), wf 5
+        # 0) apple to apple comparison for uSMILES (translate here by SMILEStrans), wf 5
         if 'uSMILES' in keywords:
             rptuSMILES = keywords['uSMILES']
+            try:
+                sTr = SMILEStrans(keywords['uSMILES'])
+                rptuSMILES = sTr.translate()
+            except:
+                logging.warning("Error occurred during the SMILEStrans call for uSMILES: %s" %(keywords['uSMILES']))
+                pass
             for cand in self.cp.polymer.find({'_id': {'$regex': rptuSMILES, '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0}
