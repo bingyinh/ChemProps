@@ -106,10 +106,16 @@ class nmChemPropsAPI():
         # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
         rptname = keywords['ChemicalName']
         # query for '_stdname' with rptname
-        for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
+        try:
+            for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+        except:
+            for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname.replace('-',''), '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
         # query for '_abbreviations' array
         for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
             if cand['_id'] not in candidates:
