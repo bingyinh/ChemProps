@@ -105,9 +105,29 @@ class nmChemPropsAPI():
                 candidates[cand['_id']]['wf'] += 5
         # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
         rptname = keywords['ChemicalName']
-        # query for '_stdname' with rptname
         try:
+            # query for '_stdname' with rptname
             for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # query for '_abbreviations' array
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # query for '_synonyms' array
+            for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # query for '_abbreviations' array
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # query for '_synonyms' array
+            for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0}
                 candidates[cand['_id']]['wf'] += 3
@@ -116,16 +136,22 @@ class nmChemPropsAPI():
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0}
                 candidates[cand['_id']]['wf'] += 3
-        # query for '_abbreviations' array
-        for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
-        # query for '_synonyms' array
-        for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname.replace('-',''), '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname.replace('-',''), '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname.replace('-',''), '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname.replace('-',''), '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
         # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2+1
         if 'Abbreviation' in keywords:
             rptabbr = keywords['Abbreviation']
