@@ -122,7 +122,7 @@ class nmChemPropsAPI():
             candidates[cand['_id']]['wf'] += 3
         # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2+1
         if 'Abbreviation' in keywords:
-            rptabbr = keywords['Abbreviation']
+            rptabbr = keywords['Abbreviation'].replace('-','\-')
             # query for '_abbreviations' array, wf 2
             for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}}):
                 if cand['_id'] not in candidates:
@@ -136,7 +136,7 @@ class nmChemPropsAPI():
                 candidates[cand['_id']]['wf'] += 1  
         # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
         if 'TradeName' in keywords:
-            rpttrad = keywords['TradeName']
+            rpttrad = keywords['TradeName'].replace('-','\-')
             # query for '_tradenames' array
             relBOW = self.containAllWords(rpttrad, '_tradenames', self.cp.polymer)
             for cand in relBOW:
@@ -324,7 +324,7 @@ class nmChemPropsAPI():
         rptname = ''
         candidates = dict() # use '_id' as keys
         # 0) apple to apple comparison for filler names (in _id, _alias), wf 3
-        rptname = keywords['ChemicalName']
+        rptname = keywords['ChemicalName'].replace('-','\-')
         # query for '_id' with rptname
         for cand in self.cp.filler.find({'_id': {'$regex': rptname, '$options': 'i'}}):
             if cand['_id'] not in candidates:
