@@ -77,8 +77,8 @@ def unitAdjust(myStr):
     if '/' not in myStr or 'g' not in myStr.lower() or ('c' not in myStr.lower() and 'm' not in myStr.lower()):
         return myStr
     noDig = re.sub(r'[0-9,.]', '', myStr.lower()) # remove all digits and the decimal
-    mass = noDig.split('/')[0]
-    volume = noDig.split('/')[-1]
+    mass = noDig.split('/')[0].strip()
+    volume = noDig.split('/')[-1].strip()
     if 'g' not in mass or ('c' not in volume and 'm' not in volume):
         return myStr
     try:
