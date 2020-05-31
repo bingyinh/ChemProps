@@ -94,87 +94,92 @@ class nmChemPropsAPI():
         # 0) apple to apple comparison for uSMILES (translate here by SMILEStrans), wf 5
         if 'uSMILES' in keywords:
             rptuSMILES = keywords['uSMILES']
-            try:
-                sTr = SMILEStrans(keywords['uSMILES'])
-                rptuSMILES = sTr.translate()
-            except:
-                logging.warning("Error occurred during the SMILEStrans call for uSMILES: %s" %(keywords['uSMILES']))
-                pass
-            for cand in self.cp.polymer.find({'_id': {'$regex': rptuSMILES, '$options': 'i'}}):
-                if cand['_id'] not in candidates:
-                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
-                candidates[cand['_id']]['wf'] += 5
+            if len(rptuSMILES) > 0:
+                try:
+                    sTr = SMILEStrans(keywords['uSMILES'])
+                    rptuSMILES = sTr.translate()
+                except:
+                    logging.warning("Error occurred during the SMILEStrans call for uSMILES: %s" %(keywords['uSMILES']))
+                    pass
+                for cand in self.cp.polymer.find({'_id': {'$regex': rptuSMILES, '$options': 'i'}}):
+                    if cand['_id'] not in candidates:
+                        candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                    candidates[cand['_id']]['wf'] += 5
         # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
         rptname = keywords['ChemicalName'].replace('-','\-').replace('(','\\(').replace(')','\\)')
-        # query for '_stdname' with rptname
-        for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
-        # query for '_abbreviations' array
-        for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
-        # query for '_synonyms' array
-        for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
+        if len(rptname) > 0:
+            # query for '_stdname' with rptname
+            for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # query for '_abbreviations' array
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # query for '_synonyms' array
+            for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
         # 2) apple to apple comparison for abbreviations (in _abbreviations), wf 2+1
         if 'Abbreviation' in keywords:
             rptabbr = keywords['Abbreviation'].replace('-','\-').replace('(','\\(').replace(')','\\)')
-            # query for '_abbreviations' array, wf 2
-            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}}):
-                if cand['_id'] not in candidates:
-                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
-                candidates[cand['_id']]['wf'] += 2
-            # boc, wf 1
-            rptabbrBOC = self.bagOfChar(rptabbr)
-            for cand in self.cp.polymer.find({'_boc': {'$regex': rptabbrBOC}}):
-                if cand['_id'] not in candidates:
-                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
-                candidates[cand['_id']]['wf'] += 1  
+            if len(rptabbr) > 0:
+                # query for '_abbreviations' array, wf 2
+                for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}}):
+                    if cand['_id'] not in candidates:
+                        candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                    candidates[cand['_id']]['wf'] += 2
+                # boc, wf 1
+                rptabbrBOC = self.bagOfChar(rptabbr)
+                for cand in self.cp.polymer.find({'_boc': {'$regex': rptabbrBOC}}):
+                    if cand['_id'] not in candidates:
+                        candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                    candidates[cand['_id']]['wf'] += 1  
         # 3) relaxed bag-of-word comparison for tradenames (in _tradenames), wf 1
         if 'TradeName' in keywords:
             rpttrad = keywords['TradeName'].replace('-','\-').replace('(','\\(').replace(')','\\)')
-            # query for '_tradenames' array
-            relBOW = self.containAllWords(rpttrad, '_tradenames', self.cp.polymer)
-            for cand in relBOW:
-                if cand['_id'] not in candidates:
-                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
-                candidates[cand['_id']]['wf'] += 1
-            # query for bag-of-character for only alphabets (use $regex '^0100020...')
-            tradnameBOC = self.bagOfChar(rpttrad)
-            tradnameBOCalph = tradnameBOC[:-10] # remove number's index
-            for cand in self.cp.polymer.find({'_boc': {'$regex': '^%s' %(tradnameBOCalph)}}):
-                if cand['_id'] not in candidates:
-                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
-                candidates[cand['_id']]['wf'] += 1
+            if len(rpttrad) > 0:
+                # query for '_tradenames' array
+                relBOW = self.containAllWords(rpttrad, '_tradenames', self.cp.polymer)
+                for cand in relBOW:
+                    if cand['_id'] not in candidates:
+                        candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                    candidates[cand['_id']]['wf'] += 1
+                # query for bag-of-character for only alphabets (use $regex '^0100020...')
+                tradnameBOC = self.bagOfChar(rpttrad)
+                tradnameBOCalph = tradnameBOC[:-10] # remove number's index
+                for cand in self.cp.polymer.find({'_boc': {'$regex': '^%s' %(tradnameBOCalph)}}):
+                    if cand['_id'] not in candidates:
+                        candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                    candidates[cand['_id']]['wf'] += 1
         # 4) bag-of-character comparison for polymer names (in _boc), wf 2
-        rptnameBOC = self.bagOfChar(rptname)
-        for cand in self.cp.polymer.find({'_boc': {'$regex': '%s' %(rptnameBOC)}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 2
-        # only alphabets version, wf 1
-        rptnameBOCalph = rptnameBOC[:-10] # remove number's index
-        for cand in self.cp.polymer.find({'_boc': {'$regex': '^%s' %(rptnameBOCalph)}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 1
+        if len(rptname) > 0:
+            rptnameBOC = self.bagOfChar(rptname)
+            for cand in self.cp.polymer.find({'_boc': {'$regex': '%s' %(rptnameBOC)}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 2
+            # only alphabets version, wf 1
+            rptnameBOCalph = rptnameBOC[:-10] # remove number's index
+            for cand in self.cp.polymer.find({'_boc': {'$regex': '^%s' %(rptnameBOCalph)}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1
         # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
         # query for '_stdname' array
-        relBOWstd = self.containAllWords(rptname, '_stdname', self.cp.polymer)
-        for cand in relBOWstd:
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 2
-        relBOWsyn = self.containAllWords(rptname, '_synonyms', self.cp.polymer)
-        for cand in relBOWsyn:
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 2
+            relBOWstd = self.containAllWords(rptname, '_stdname', self.cp.polymer)
+            for cand in relBOWstd:
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 2
+            relBOWsyn = self.containAllWords(rptname, '_synonyms', self.cp.polymer)
+            for cand in relBOWsyn:
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 2
         # end of the query part
         # if there is not a match:
         #   insert _inputname, _inputabbr, _inputsmiles, _nmid[] to unknowns.polymer
@@ -326,48 +331,63 @@ class nmChemPropsAPI():
         candidates = dict() # use '_id' as keys
         # 0) apple to apple comparison for filler names (in _id, _alias), wf 3
         rptname = removeNano(keywords['ChemicalName'].replace('-','\-').replace('(','\\(').replace(')','\\)'))
-        # query for '_id' with rptname
-        for cand in self.cp.filler.find({'_id': {'$regex': '^'+rptname+'$', '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 4
-        for cand in self.cp.filler.find({'_id': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
-        # query for '_alias' array
-        for cand in self.cp.filler.find({'_alias': {'$regex': '^'+rptname+'$', '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 4
-        for cand in self.cp.filler.find({'_alias': {'$regex': rptname, '$options': 'i'}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 3
-        # 1) bag-of-character comparison for filler names (in _boc), wf 2
-        rptnameBOC = self.bagOfChar(rptname)
-        for cand in self.cp.filler.find({'_boc': {'$regex': '%s' %(rptnameBOC)}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 2
-        # only alphabets version, wf 1
-        rptnameBOCalph = rptnameBOC[:-10] # remove number's index
-        for cand in self.cp.filler.find({'_boc': {'$regex': '^%s' %(rptnameBOCalph)}}):
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 1
-        # 2) relaxed bag-of-word comparison for filler names (in _id, _alias), wf 1
-        # query for '_id'
-        relBOWstd = self.containAllWords(rptname, '_id', self.cp.filler)
-        for cand in relBOWstd:
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 1
-        relBOWsyn = self.containAllWords(rptname, '_alias', self.cp.filler)
-        for cand in relBOWsyn:
-            if cand['_id'] not in candidates:
-                candidates[cand['_id']] = {'data': cand, 'wf': 0}
-            candidates[cand['_id']]['wf'] += 1
+        if len(rptname) > 0:
+            # query for '_id' with rptname
+            for cand in self.cp.filler.find({'_id': {'$regex': '^'+rptname+'$', '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 4
+            for cand in self.cp.filler.find({'_id': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # query for '_alias' array
+            for cand in self.cp.filler.find({'_alias': {'$regex': '^'+rptname+'$', '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 4
+            for cand in self.cp.filler.find({'_alias': {'$regex': rptname, '$options': 'i'}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 3
+            # 1) bag-of-character comparison for filler names (in _boc), wf 2
+            rptnameBOC = self.bagOfChar(rptname)
+            for cand in self.cp.filler.find({'_boc': {'$regex': '%s' %(rptnameBOC)}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 2
+            # only alphabets version, wf 1
+            rptnameBOCalph = rptnameBOC[:-10] # remove number's index
+            for cand in self.cp.filler.find({'_boc': {'$regex': '^%s' %(rptnameBOCalph)}}):
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1
+            # 2) relaxed bag-of-word comparison for filler names (in _id, _alias), wf 1
+            # query for '_id'
+            relBOWstd = self.containAllWords(rptname, '_id', self.cp.filler)
+            for cand in relBOWstd:
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1
+            relBOWsyn = self.containAllWords(rptname, '_alias', self.cp.filler)
+            for cand in relBOWsyn:
+                if cand['_id'] not in candidates:
+                    candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                candidates[cand['_id']]['wf'] += 1
+        # 3) apple to apple comparison for abbreviations (in _id, _alias), wf 2+1
+        if 'Abbreviation' in keywords and len(keywords['Abbreviation']) > 0:
+            rptabbr = keywords['Abbreviation'].replace('-','\-').replace('(','\\(').replace(')','\\)')
+            if len(rptabbr) > 0:
+                # query for '_id' array, wf 2
+                for cand in self.cp.filler.find({'_id': {'$regex': '^'+rptabbr+'$', '$options': 'i'}}):
+                    if cand['_id'] not in candidates:
+                        candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                    candidates[cand['_id']]['wf'] += 2
+                # query for '_alias' array, wf 1
+                for cand in self.cp.filler.find({'_alias': {'$regex': '^'+rptabbr+'$', '$options': 'i'}}):
+                    if cand['_id'] not in candidates:
+                        candidates[cand['_id']] = {'data': cand, 'wf': 0}
+                    candidates[cand['_id']]['wf'] += 1
         # end of the query part
         # if there is not a match:
         #   call getFillerDensityGoogle(filler) i.e. filler density module see if there's a result
