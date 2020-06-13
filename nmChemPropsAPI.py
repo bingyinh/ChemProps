@@ -204,7 +204,7 @@ class nmChemPropsAPI():
             for cand in self.cp.polymer.find({'_boc': {'$regex': '^%s' %(rptnameBOCalph)}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0, 'features': []}
-                candidates[cand['_id']]['wf'] += 1。2
+                candidates[cand['_id']]['wf'] += 1.2
                 candidates[cand['_id']]['features'].append('41')
         # 5) relaxed bag-of-word comparison for polymer names (in _stdname, _synonyms), wf 2
         # query for '_stdname' array
