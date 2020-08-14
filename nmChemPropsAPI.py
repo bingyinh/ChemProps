@@ -129,7 +129,7 @@ class nmChemPropsAPI():
                 except:
                     logging.warning("Error occurred during the SMILEStrans call for uSMILES: %s" %(keywords['uSMILES']))
                     pass
-                for cand in self.cp.polymer.find({'_id': {'$regex': rptuSMILES, '$options': 'i'}}):
+                for cand in self.cp.polymer.find({'_id': {'$regex': '\\b%s\\b' %(rptuSMILES), '$options': 'i'}}):
                     if cand['_id'] not in candidates:
                         candidates[cand['_id']] = {'data': cand, 'wf': 0, 'features': []}
                     candidates[cand['_id']]['wf'] += 1.6
@@ -138,19 +138,19 @@ class nmChemPropsAPI():
         rptname = keywords['ChemicalName'].replace('-','\-').replace('(','\\(').replace(')','\\)').replace('[','\\[').replace(']','\\]')
         if len(rptname) > 0:
             # query for '_stdname' with rptname
-            for cand in self.cp.polymer.find({'_stdname': {'$regex': rptname, '$options': 'i'}}):
+            for cand in self.cp.polymer.find({'_stdname': {'$regex': '\\b%s\\b' %(rptname), '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0, 'features': []}
                 candidates[cand['_id']]['wf'] += 1
                 candidates[cand['_id']]['features'].append('10')
             # query for '_abbreviations' array
-            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptname, '$options': 'i'}}):
+            for cand in self.cp.polymer.find({'_abbreviations': {'$regex': '\\b%s\\b' %(rptname), '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0, 'features': []}
                 candidates[cand['_id']]['wf'] += 1
                 candidates[cand['_id']]['features'].append('11')
             # query for '_synonyms' array
-            for cand in self.cp.polymer.find({'_synonyms': {'$regex': rptname, '$options': 'i'}}):
+            for cand in self.cp.polymer.find({'_synonyms': {'$regex': '\\b%s\\b' %(rptname), '$options': 'i'}}):
                 if cand['_id'] not in candidates:
                     candidates[cand['_id']] = {'data': cand, 'wf': 0, 'features': []}
                 candidates[cand['_id']]['wf'] += 1
@@ -160,7 +160,7 @@ class nmChemPropsAPI():
             rptabbr = keywords['Abbreviation'].replace('-','\-').replace('(','\\(').replace(')','\\)').replace('[','\\[').replace(']','\\]')
             if len(rptabbr) > 0:
                 # query for '_abbreviations' array, wf 2
-                for cand in self.cp.polymer.find({'_abbreviations': {'$regex': rptabbr, '$options': 'i'}}):
+                for cand in self.cp.polymer.find({'_abbreviations': {'$regex': '\\b%s\\b' %(rptabbr), '$options': 'i'}}):
                     if cand['_id'] not in candidates:
                         candidates[cand['_id']] = {'data': cand, 'wf': 0, 'features': []}
                     candidates[cand['_id']]['wf'] += 0.8
@@ -551,7 +551,7 @@ class nmChemPropsAPI():
         words = query.split()
         ids = dict()
         for word in words:
-            for result in collection.find({field: {'$regex': word, '$options':'i'}}):
+            for result in collection.find({field: {'$regex': '\\b%s\\b' %(word), '$options':'i'}}):
                 if result['_id'] not in ids:
                     ids[result['_id']] = {'data': result, 'freq': 0}
                 ids[result['_id']]['freq'] += 1
