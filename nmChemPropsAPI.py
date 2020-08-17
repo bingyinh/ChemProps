@@ -136,7 +136,7 @@ class nmChemPropsAPI():
                     candidates[cand['_id']]['features'].append('00')
         # 1) apple to apple comparison for polymer names (in _stdname, _abbreviations, _synonyms), wf 3
         rptname = keywords['ChemicalName'].replace('-','\-').replace('(','\\(').replace(')','\\)').replace('[','\\[').replace(']','\\]')
-        if len(rptname) > 0:
+        if len(rptname) > 1:
             # query for '_stdname' with rptname
             for cand in self.cp.polymer.find({'_stdname': {'$regex': '\\b%s\\b' %(rptname), '$options': 'i'}}):
                 if cand['_id'] not in candidates:
@@ -549,15 +549,18 @@ class nmChemPropsAPI():
         pattern = re.compile('[^a-zA-Z]', re.UNICODE)
         query = pattern.sub(' ', query)
         words = query.split()
+        nWords = len(words)
         ids = dict()
         for word in words:
+            if len(word) == 1: # skip the single characters
+                nWords -= 1
+                continue
             for result in collection.find({field: {'$regex': '\\b%s\\b' %(word), '$options':'i'}}):
                 if result['_id'] not in ids:
                     ids[result['_id']] = {'data': result, 'freq': 0}
                 ids[result['_id']]['freq'] += 1
         # check if the length of words equals any of the freq in ids
         output = []
-        nWords = len(words)
         for cand in ids:
             if ids[cand]['freq'] == nWords:
                 output.append(ids[cand]['data'])
