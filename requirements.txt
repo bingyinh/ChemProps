@@ -1,4 +1,4 @@
-requests==2.22.0
+requests==2.31.0
 xlrd==1.2.0
 pymongo==3.8.0
 MechanicalSoup==0.12.0
